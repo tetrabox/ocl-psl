@@ -1,0 +1,133 @@
+grammar org.xtext.example.mydsl.MyDsl with org.eclipse.ocl.xtext.completeocl.CompleteOCL
+
+import "http://www.xtext.org/example/mydsl/MyDsl"
+import "http://www.eclipse.org/emf/2002/Ecore" as ecore
+import "http://www.eclipse.org/ocl/2015/BaseCS" as base
+
+Document:
+	(ownedImports+=Import)*
+//	('beginocl' ownedOCLDocument=CompleteOCLDocumentCS 'endocl')?
+	(ownedProperties+=Property)+;
+
+Import:
+	'import' importURI=IMPORT_URI;
+
+Property:
+	{AndProperty} (left=UnaryProperty | left=BinaryProperty | '(' left=UnaryProperty ')' | '(' left=BinaryProperty ')') 'and' right=Property
+	| {OrPropertyBooleanProperty} (left=UnaryProperty | left=BinaryProperty | '(' left=UnaryProperty ')' | '(' left=BinaryProperty ')') 'or' right=Property
+	| {AbortProperty} (left=UnaryProperty | left=BinaryProperty | '(' left=UnaryProperty ')' | '(' left=BinaryProperty ')') 'abort' right=BooleanOrOCLLiteral
+	| {UntilProperty} (left=UnaryProperty | left=BinaryProperty | '(' left=UnaryProperty ')' | '(' left=BinaryProperty ')') 'until' right=BooleanOrOCLLiteral
+	| UnaryProperty | BinaryProperty | '(' UnaryProperty ')' | '(' BinaryProperty ')'
+	;
+
+UnaryProperty:
+	{BooleanProperty} operand=BooleanOrOCLLiteral
+	| {SequenceProperty} operand=Sequence
+	| {SequenceTightProperty} operand=Sequence '!'
+	| {AlwaysProperty} 'always' operand=Property
+	| {NeverBooleanProperty} 'never' operand=BooleanOrOCLLiteral
+	| {NeverSequenceProperty} 'never' operand=Sequence
+	| {NextEProperty} 'next_e' operand=BooleanOrOCLLiteral
+	| {EventuallyBooleanProperty} 'eventually!' operand=BooleanOrOCLLiteral
+	| {EventuallySequenceProperty} 'eventually!' operand=Sequence
+;
+
+BinaryProperty:
+	{OrBooleanPropertyProperty} left=BooleanOrOCLLiteral 'or' right=Property
+	| {ImpliesProperty} left=BooleanOrOCLLiteral '->' right=Property
+	| {EquivalenceProperty} left=BooleanOrOCLLiteral '<->' right=BooleanOrOCLLiteral
+	| {OverlappingUntilProperty} left=BooleanOrOCLLiteral 'until_' right=BooleanOrOCLLiteral
+	| {BeforeProperty} left=BooleanOrOCLLiteral 'before' right=BooleanOrOCLLiteral
+	| {SuffixImplicationProperty} left=Sequence '|=>' right=Property
+	| {OverlappingSuffixImplicationProperty} left=Sequence '|->' right=Property
+	| {NextEventAProperty} 'next_event_a' '(' left=BooleanOrOCLLiteral ')' '[' range=Range ']' '(' right=Property ')'
+;
+
+BooleanOrOCLLiteral:
+	{NotBooleanOrOCLLiteral} 'not' literal=BooleanOrOCLLiteral
+	| {BooleanLiteral} literal=BooleanLiteralExpCS
+	| {OCLLiteral} 'ocl' literal=[base::ConstraintCS]
+;
+
+SERE:
+	SimpleSERE
+	| {FusionSERE} hd=SimpleSERE ':' tl=SimpleSERE
+	| {ConcatenationSERE} hd=SimpleSERE ';' tl=SimpleSERE
+;
+
+SimpleSERE:
+	BooleanOrOCLLiteral
+	| Sequence
+	| CompoundSERE
+//	| Clocked_SERE
+;
+
+Sequence:
+	BracedSERE | RepeatedSERE
+;
+
+RepeatedSERE:
+	{BooleanCountedConsecutiveRepetition} expression=BooleanOrOCLLiteral '[' '*' count=Count? ']'
+	| {SequenceCountedConsecutiveRepetition} expression=BracedSERE '[' '*' count=Count? ']'
+	| {SequenceCountedConsecutiveRepetition} '(' expression=RepeatedSERE '[' '*' count=Count? ']' ')'
+	| {BooleanConsecutiveRepetition} expression=BooleanOrOCLLiteral '[' '+' ']'
+	| {SequenceConsecutiveRepetition} expression=BracedSERE '[' '+' ']'
+	| {SequenceConsecutiveRepetition} '(' expression=RepeatedSERE '[' '+' ']' ')'
+	| {BooleanCountedNonConsecutiveRepetition} expression=BooleanOrOCLLiteral '[' '=' count=Count ']'
+	| {BooleanCountedGotoRepetition} expression=BooleanOrOCLLiteral '[' '->' count=Count? ']'
+	| {WildCard} '[' '*' count=Count? ']'
+	| {LengthOne} '[' '+' ']'
+;
+
+BracedSERE:
+	'{' expression=SERE '}'
+;
+
+//Clocked_SERE:
+//	Braced_SERE '@' 
+//;
+
+CompoundSERE:
+	RepeatedSERE | BracedSERE | BinaryCompoundSERE
+//	| Parameterized_SERE | Clocked_SERE
+;
+
+BinaryCompoundSERE:
+	{SEREOr} (left=RepeatedSERE | left=BracedSERE | '(' left=BinaryCompoundSERE ')') '|' (right=RepeatedSERE | right=BracedSERE | '(' right=BinaryCompoundSERE ')')
+	| {SEREAndNLM} (left=RepeatedSERE | left=BracedSERE | '(' left=BinaryCompoundSERE ')') '&' (right=RepeatedSERE | right=BracedSERE | '(' right=BinaryCompoundSERE ')')
+	| {SEREAndLM} (left=RepeatedSERE | left=BracedSERE | '(' left=BinaryCompoundSERE ')') '&&' (right=RepeatedSERE | right=BracedSERE | '(' right=BinaryCompoundSERE ')')
+	| {SEREWithin} (left=RepeatedSERE | left=BracedSERE | '(' left=BinaryCompoundSERE ')') 'within' (right=RepeatedSERE | right=BracedSERE | '(' right=BinaryCompoundSERE ')')
+;
+
+//Parameterized_SERE:
+//	'for' params=Parameters_Definition ':' operator=And_Or_SERE_Op '{' SERE=[SERE] '}'
+//;
+
+//Parameters_Definition:
+//	paramDef+=Parameter_Definition (',' paramDef+=Parameter_Definition)*
+//;
+
+//Parameter_Definition:
+//	PSL_Identifier Index_Range? 'in' Value_Set
+//;
+
+Count:
+	COUNT=NUMBER | Range
+;
+
+Range:
+	LOWER_BOUND = NUMBER ':' HIGHER_BOUND = NUMBER
+;
+
+NUMBER returns ecore::EInt :
+	INT
+;
+
+terminal IMPORT_URI:
+	SCHEME SIMPLE_ID (("." | "/") SIMPLE_ID)*;
+	
+terminal SCHEME:
+	SIMPLE_ID ":/";
+
+FQN:
+	ID ("." ID)*;
